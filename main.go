@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	
 	"syscall"
 	"time"
 
@@ -38,6 +37,10 @@ func main() {
 
 	fmt.Printf("Host created with ID: %s\n", h.ID())
 	fmt.Printf("Listening on addresses: %v\n", h.Addrs())
+
+	// Initialize and start CircuitManager
+	cm := pkg.NewCircuitManager(h, peerInfoMgr, cfg)
+	cm.StartCircuitRotation(ctx)
 
 	// Periodically print discovered peer info for debugging
 	go func() {
