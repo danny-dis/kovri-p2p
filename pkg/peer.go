@@ -165,6 +165,22 @@ func NewHost(ctx context.Context, bootstrapPeers []string, localPeerInfo *PeerIn
 	return h, dht, peerInfoMgr, nil
 }
 
+// ParseMultiaddrForIP extracts the IP address from a multiaddr string.
+func ParseMultiaddrForIP(multiaddrStr string) (string, error) {
+	maddr, err := multiaddr.NewMultiaddr(multiaddrStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid multiaddress: %w", err)
+	}
+
+	// Extract the IP component
+	for _, p := range maddr.Protocols() {
+		if p.Code == multiaddr.P_IP4 || p.Code == multiaddr.P_IP6 {
+			return maddr.ValueForProtocol(p.Code)
+		}
+	}
+	return "", fmt.Errorf("no IP address found in multiaddress: %s", multiaddrStr)
+}
+
 // discoverPeers continuously finds and connects to new peers.
 func discoverPeers(ctx context.Context, h host.Host, dht *dht.IpfsDHT, peerInfoMgr *PeerInfoManager, localPeerInfo PeerInfo) {
 	routingDiscovery := routing.NewRoutingDiscovery(dht)

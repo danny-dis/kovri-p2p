@@ -12,6 +12,7 @@ type Config struct {
 	ExitCountry             string        `mapstructure:"exit_country"`
 	CircuitRotationInterval time.Duration `mapstructure:"circuit_rotation_interval"`
 	BootstrapPeers          []string      `mapstructure:"bootstrap_peers"`
+	GeoIPDatabasePath       string        `mapstructure:"geoip_database_path"`
 }
 
 // LoadConfig loads configuration from file and environment variables.
@@ -24,6 +25,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("exit_country", "")
 	v.SetDefault("circuit_rotation_interval", "15m")
 	v.SetDefault("bootstrap_peers", []string{})
+	v.SetDefault("geoip_database_path", "GeoLite2-Country.mmdb") // Default GeoIP DB path
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
