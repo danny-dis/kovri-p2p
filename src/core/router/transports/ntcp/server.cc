@@ -47,6 +47,7 @@ NTCPServer::NTCPServer(
     std::size_t port)
     : m_IsRunning(false),
       m_Service(service),
+      m_SSLContext(boost::asio::ssl::context::tlsv13),
       m_NTCPEndpoint(boost::asio::ip::tcp::v4(), port),
       m_NTCPEndpointV6(boost::asio::ip::tcp::v6(), port),
       m_NTCPAcceptor(nullptr),
@@ -63,7 +64,7 @@ void NTCPServer::Start() {
       std::make_unique<boost::asio::ip::tcp::acceptor>(
           m_Service,
           m_NTCPEndpoint);
-    auto conn = std::make_shared<NTCPSession>(*this);
+        auto conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
     m_NTCPAcceptor->async_accept(
         conn->GetSocket(),
         std::bind(
@@ -79,7 +80,7 @@ void NTCPServer::Start() {
       m_NTCPV6Acceptor->set_option(boost::asio::ip::v6_only(true));
       m_NTCPV6Acceptor->bind(m_NTCPEndpointV6);
       m_NTCPV6Acceptor->listen();
-      auto conn = std::make_shared<NTCPSession>(*this);
+          auto conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
       m_NTCPV6Acceptor->async_accept(
           conn->GetSocket(),
           std::bind(
@@ -96,41 +97,50 @@ void NTCPServer::HandleAccept(
     const boost::system::error_code& ecode) {
   if (!ecode) {
     LOG(debug) << "NTCPServer: handling accepted connection";
-    boost::system::error_code ec;
-    auto ep = conn->GetSocket().remote_endpoint(ec);
-    if (!ec) {
-      LOG(debug) << "NTCPServer: connected from " << ep;
-      auto it = m_BanList.find(ep.address());
-      if (it != m_BanList.end()) {
-        std::uint32_t ts = kovri::core::GetSecondsSinceEpoch();
-        if (ts < it->second) {
-          LOG(debug)
-            << "NTCPServer: " << ep.address() << " is banned for "
-            << it->second - ts << " more seconds";
-          conn = nullptr;
-        } else {
-          m_BanList.erase(it);
-        }
-      }
-      if (conn)
-        conn->ServerLogin();
-    } else {
-      LOG(error)
-        << "NTCPServer: " << __func__ << " remote endpoint: " << ec.message();
-    }
+    conn->GetSocket().async_handshake(
+        boost::asio::ssl::stream_base::server,
+        [this, conn](const boost::system::error_code& ec) {
+            if (!ec) {
+                boost::system::error_code ec;
+                auto ep = conn->GetSocket().lowest_layer().remote_endpoint(ec);
+                if (!ec) {
+                    LOG(debug) << "NTCPServer: connected from " << ep;
+                    auto it = m_BanList.find(ep.address());
+                    if (it != m_BanList.end()) {
+                        std::uint32_t ts = kovri::core::GetSecondsSinceEpoch();
+                        if (ts < it->second) {
+                            LOG(debug)
+                                << "NTCPServer: " << ep.address() << " is banned for "
+                                << it->second - ts << " more seconds";
+                            conn = nullptr;
+                        } else {
+                            m_BanList.erase(it);
+                        }
+                    }
+                    if (conn)
+                        conn->ServerLogin();
+                } else {
+                    LOG(error)
+                        << "NTCPServer: " << __func__ << " remote endpoint: " << ec.message();
+                }
+            } else {
+                LOG(warning) << "NTCPServer: handshake failed: " << ec.message();
+                conn->Terminate();
+            }
+        });
   } else {
       if (ecode != boost::asio::error::operation_aborted)
         LOG(error) << "NTCPServer: " << __func__ << ": '" << ecode.message()
                    << "'";
   }
   if (ecode != boost::asio::error::operation_aborted) {
-    conn = std::make_shared<NTCPSession>(*this);
+    auto new_conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
     m_NTCPAcceptor->async_accept(
-        conn->GetSocket(),
+        new_conn->GetSocket().lowest_layer(),
         std::bind(
             &NTCPServer::HandleAccept,
             this,
-            conn,
+            new_conn,
             std::placeholders::_1));
   }
 }
@@ -140,41 +150,50 @@ void NTCPServer::HandleAcceptV6(
     const boost::system::error_code& ecode) {
   if (!ecode) {
     LOG(debug) << "NTCPServer: handling V6 accepted connection";
-    boost::system::error_code ec;
-    auto ep = conn->GetSocket().remote_endpoint(ec);
-    if (!ec) {
-      LOG(debug) << "NTCPServer: V6 connected from " << ep;
-      auto it = m_BanList.find(ep.address());
-      if (it != m_BanList.end()) {
-        std::uint32_t ts = kovri::core::GetSecondsSinceEpoch();
-        if (ts < it->second) {
-          LOG(debug)
-            << "NTCPServer: " << ep.address() << " is banned for "
-            << it->second - ts << " more seconds";
-          conn = nullptr;
-        } else {
-          m_BanList.erase(it);
-        }
-      }
-      if (conn)
-        conn->ServerLogin();
-    } else {
-      LOG(error)
-          << "NTCPServer: " << __func__ << " remote endpoint: " << ec.message();
-    }
+    conn->GetSocket().async_handshake(
+        boost::asio::ssl::stream_base::server,
+        [this, conn](const boost::system::error_code& ec) {
+            if (!ec) {
+                boost::system::error_code ec;
+                auto ep = conn->GetSocket().lowest_layer().remote_endpoint(ec);
+                if (!ec) {
+                    LOG(debug) << "NTCPServer: V6 connected from " << ep;
+                    auto it = m_BanList.find(ep.address());
+                    if (it != m_BanList.end()) {
+                        std::uint32_t ts = kovri::core::GetSecondsSinceEpoch();
+                        if (ts < it->second) {
+                            LOG(debug)
+                                << "NTCPServer: " << ep.address() << " is banned for "
+                                << it->second - ts << " more seconds";
+                            conn = nullptr;
+                        } else {
+                            m_BanList.erase(it);
+                        }
+                    }
+                    if (conn)
+                        conn->ServerLogin();
+                } else {
+                    LOG(error)
+                        << "NTCPServer: " << __func__ << " remote endpoint: " << ec.message();
+                }
+            } else {
+                LOG(warning) << "NTCPServer: handshake failed: " << ec.message();
+                conn->Terminate();
+            }
+        });
   } else {
       if (ecode != boost::asio::error::operation_aborted)
         LOG(error) << "NTCPServer: " << __func__ << ": '" << ecode.message()
                    << "'";
   }
   if (ecode != boost::asio::error::operation_aborted) {
-    conn = std::make_shared<NTCPSession>(*this);
+    auto new_conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
     m_NTCPV6Acceptor->async_accept(
-        conn->GetSocket(),
+        new_conn->GetSocket().lowest_layer(),
         std::bind(
             &NTCPServer::HandleAcceptV6,
             this,
-            conn,
+            new_conn,
             std::placeholders::_1));
   }
 }
@@ -187,7 +206,7 @@ void NTCPServer::Connect(
     << "NTCPServer: connecting to "
     << "[" << conn->GetRemoteRouter()->GetIdentHashAbbreviation() << "] "
     << address << ":" << port;
-  conn->GetSocket().async_connect(
+  conn->GetSocket().lowest_layer().async_connect(
       boost::asio::ip::tcp::endpoint(
           address,
           port),
@@ -214,13 +233,25 @@ void NTCPServer::HandleConnect(
     return;
   }
   auto& socket = conn->GetSocket();
-  LOG(debug) << "NTCPServer: connected to " << socket.remote_endpoint();
-  if (socket.local_endpoint().protocol() == boost::asio::ip::tcp::v6())
-    context.UpdateNTCPV6Address(socket.local_endpoint().address());
-  conn->StartClientSession();
-  m_Service.post([conn, this]() {
-      this->AddNTCPSession(conn);
-  });
+  LOG(debug) << "NTCPServer: connected to " << socket.lowest_layer().remote_endpoint();
+  if (socket.lowest_layer().local_endpoint().protocol() == boost::asio::ip::tcp::v6())
+    context.UpdateNTCPV6Address(socket.lowest_layer().local_endpoint().address());
+  conn->GetSocket().async_handshake(
+      boost::asio::ssl::stream_base::client,
+      [this, conn](const boost::system::error_code& ec) {
+          if (!ec) {
+              conn->StartClientSession();
+              m_Service.post([conn, this]() {
+                  this->AddNTCPSession(conn);
+              });
+          } else {
+              LOG(warning)
+                  << "NTCPServer:" 
+                  << " [" << conn->GetRemoteRouter()->GetIdentHashAbbreviation() << "] "
+                  << "handshake failed: " << ec.message();
+              conn->Terminate();
+          }
+      });
 }
 
 void NTCPServer::AddNTCPSession(

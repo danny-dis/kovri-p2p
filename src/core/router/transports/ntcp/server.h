@@ -34,6 +34,7 @@
 #define SRC_CORE_ROUTER_TRANSPORTS_NTCP_SERVER_H_
 
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 
 #include <cstdint>
 #include <map>
@@ -101,6 +102,7 @@ class NTCPServer {
   bool m_IsRunning;
 
   boost::asio::io_service& m_Service;
+  boost::asio::ssl::context m_SSLContext;
 
   boost::asio::ip::tcp::endpoint m_NTCPEndpoint, m_NTCPEndpointV6;
   std::unique_ptr<boost::asio::ip::tcp::acceptor> m_NTCPAcceptor, m_NTCPV6Acceptor;

@@ -57,10 +57,11 @@ namespace core {
 
 NTCPSession::NTCPSession(
     NTCPServer& server,
+    boost::asio::ssl::context& context,
     std::shared_ptr<const kovri::core::RouterInfo> remote_router)
     : TransportSession(remote_router),
       m_Server(server),
-      m_Socket(m_Server.GetService()),
+      m_Socket(m_Server.GetService(), context),
       m_TerminationTimer(m_Server.GetService()),
       m_IsEstablished(false),
       m_IsTerminated(false),
@@ -69,8 +70,6 @@ NTCPSession::NTCPSession(
       m_NextMessageOffset(0),
       m_IsSending(false),
       m_Exception(__func__) {
-  m_DHKeysPair = transports.GetNextDHKeysPair();
-  m_Establisher = std::make_unique<Establisher>();
   if (remote_router) {
     // Set shortened ident hash and remote endpoint for logging
     SetRemoteIdentHashAbbreviation();

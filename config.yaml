@@ -1,0 +1,9 @@
+# Default configuration for the mesh network
+
+# User-defined country for the exit node (e.g., US, DE, JP).
+# If empty or commented out, the fastest route will be selected automatically.
+exit_country: ""
+
+# How often to rebuild and switch to a new circuit to enhance anonymity.
+# Uses Go's time.ParseDuration format (e.g., 10m, 1h, 30s).
+circuit_rotation_interval: "15m"

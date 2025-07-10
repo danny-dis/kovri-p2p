@@ -34,6 +34,7 @@
 #define SRC_CORE_ROUTER_TRANSPORTS_NTCP_SESSION_H_
 
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 
 #include <cstdint>
 #include <map>
@@ -261,13 +262,12 @@ class NTCPSession
   std::string m_RemoteIdentHashAbbreviation;
 
   NTCPServer& m_Server;
-  boost::asio::ip::tcp::socket m_Socket;
+    boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_Socket;
   boost::asio::ip::tcp::endpoint m_RemoteEndpoint;
   boost::asio::deadline_timer m_TerminationTimer;
   bool m_IsEstablished, m_IsTerminated;
 
-  kovri::core::CBCDecryption m_Decryption;
-  kovri::core::CBCEncryption m_Encryption;
+  
 
   /// @enum NTCPSize
   enum NTCPSize : std::uint16_t {
