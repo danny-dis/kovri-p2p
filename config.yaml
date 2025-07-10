@@ -7,3 +7,7 @@ exit_country: ""
 # How often to rebuild and switch to a new circuit to enhance anonymity.
 # Uses Go's time.ParseDuration format (e.g., 10m, 1h, 30s).
 circuit_rotation_interval: "15m"
+
+bootstrap_peers:
+  - "/ip4/10.137.0.18/tcp/42151/p2p/12D3KooWAGo4WtoNw7FycHg1wLyXpJUikCFTqiDoFFifTswfiGhT"
+
