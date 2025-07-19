@@ -57,11 +57,10 @@ namespace core {
 
 NTCPSession::NTCPSession(
     NTCPServer& server,
-    boost::asio::ssl::context& context,
     std::shared_ptr<const kovri::core::RouterInfo> remote_router)
     : TransportSession(remote_router),
       m_Server(server),
-      m_Socket(m_Server.GetService(), context),
+      m_Socket(m_Server.GetService()),
       m_TerminationTimer(m_Server.GetService()),
       m_IsEstablished(false),
       m_IsTerminated(false),
@@ -216,13 +215,10 @@ void NTCPSession::HandlePhase2Received(
     kovri::core::AESKey aes_key;
     CreateAESKey(m_Establisher->phase2.pub_key.data(), aes_key);
     m_Decryption.SetKey(aes_key);
-    m_Decryption.SetIV(m_Establisher->phase2.pub_key.data() + NTCPSize::Phase2BobIVOffset);
+    
     m_Encryption.SetKey(aes_key);
-    m_Encryption.SetIV(m_Establisher->phase1.HXxorHI.data() + NTCPSize::IV);
-    m_Decryption.Decrypt(
-        reinterpret_cast<std::uint8_t *>(&m_Establisher->phase2.encrypted),
-        sizeof(m_Establisher->phase2.encrypted),
-        reinterpret_cast<std::uint8_t *>(&m_Establisher->phase2.encrypted));
+    
+    m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(&m_Establisher->phase2.encrypted), reinterpret_cast<CipherBlock*>(&m_Establisher->phase2.encrypted));
     // Verify
     std::array<std::uint8_t, NTCPSize::PubKey * 2> xy;
     memcpy(
@@ -344,7 +340,7 @@ void NTCPSession::SendPhase3() {
   s.Sign(keys, buf);
   // TODO(anonimal): this try block should be larger or handled entirely by caller
   try {
-    m_Encryption.Encrypt(m_ReceiveBuffer, len, m_ReceiveBuffer);
+    m_Encryption.Encrypt(reinterpret_cast<CipherBlock*>(m_ReceiveBuffer), reinterpret_cast<CipherBlock*>(m_ReceiveBuffer));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -420,7 +416,7 @@ void NTCPSession::HandlePhase4Received(
     << "*** Phase4 received << processing " << bytes_transferred << " bytes";
   // TODO(anonimal): this try block should be larger or handled entirely by caller
   try {
-    m_Decryption.Decrypt(m_ReceiveBuffer, bytes_transferred, m_ReceiveBuffer);
+    m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(m_ReceiveBuffer.data()), reinterpret_cast<CipherBlock*>(m_ReceiveBuffer.data()));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -582,13 +578,8 @@ void NTCPSession::SendPhase2() {
     kovri::core::AESKey aes_key;
     CreateAESKey(m_Establisher->phase1.pub_key.data(), aes_key);
     m_Encryption.SetKey(aes_key);
-    m_Encryption.SetIV(y + NTCPSize::Phase2BobIVOffset);
     m_Decryption.SetKey(aes_key);
-    m_Decryption.SetIV(m_Establisher->phase1.HXxorHI.data() + NTCPSize::IV);
-    m_Encryption.Encrypt(
-        reinterpret_cast<std::uint8_t *>(&m_Establisher->phase2.encrypted),
-        sizeof(m_Establisher->phase2.encrypted),
-        reinterpret_cast<std::uint8_t *>(&m_Establisher->phase2.encrypted));
+    m_Encryption.Encrypt(reinterpret_cast<const CipherBlock*>(&m_Establisher->phase2.encrypted), reinterpret_cast<CipherBlock*>(&m_Establisher->phase2.encrypted));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -658,7 +649,7 @@ void NTCPSession::HandlePhase3Received(
     << "*** Phase3 received, processing";
   // TODO(anonimal): this try block should be larger or handled entirely by caller
   try {
-    m_Decryption.Decrypt(m_ReceiveBuffer, bytes_transferred, m_ReceiveBuffer);
+    m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(m_ReceiveBuffer.data()), reinterpret_cast<CipherBlock*>(m_ReceiveBuffer.data()));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -719,10 +710,7 @@ void NTCPSession::HandlePhase3ExtraReceived(
   }
   // TODO(anonimal): this try block should be larger or handled entirely by caller
   try {
-    m_Decryption.Decrypt(
-        m_ReceiveBuffer + NTCPSize::Phase3Unencrypted,
-        bytes_transferred,
-        m_ReceiveBuffer + NTCPSize::Phase3Unencrypted);
+    m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(m_ReceiveBuffer + NTCPSize::Phase3Unencrypted), reinterpret_cast<CipherBlock*>(m_ReceiveBuffer + NTCPSize::Phase3Unencrypted));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -783,7 +771,7 @@ void NTCPSession::SendPhase4(
     signature_len += (NTCPSize::IV - padding_size);
   // TODO(anonimal): this try block should be larger or handled entirely by caller
   try {
-    m_Encryption.Encrypt(m_ReceiveBuffer, signature_len, m_ReceiveBuffer);
+    m_Encryption.Encrypt(reinterpret_cast<CipherBlock*>(m_ReceiveBuffer), reinterpret_cast<CipherBlock*>(m_ReceiveBuffer));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -957,7 +945,7 @@ boost::asio::const_buffers_1 NTCPSession::CreateMsgBuffer(
         send_buffer,
         len + NTCPSize::Phase3AliceRI + padding);
     encrypted_len = len + padding + 6;
-    m_Encryption.Encrypt(send_buffer, encrypted_len, send_buffer);
+    m_Encryption.Encrypt(reinterpret_cast<const CipherBlock*>(send_buffer), reinterpret_cast<CipherBlock*>(send_buffer));
   } catch (...) {
     m_Exception.Dispatch(__func__);
     // TODO(anonimal): review if we need to safely break control, ensure exception handling by callers
@@ -1049,7 +1037,7 @@ bool NTCPSession::DecryptNextBlock(
     if (!m_NextMessage) {
       // Decrypt header and extract length
       std::array<std::uint8_t, NTCPSize::IV> buf;
-      m_Decryption.Decrypt(encrypted, buf.data());
+      m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(encrypted), reinterpret_cast<CipherBlock*>(buf.data()));
       std::uint16_t const data_size =
           core::InputByteStream::Read<std::uint16_t>(buf.data());
       if (data_size) {
@@ -1078,7 +1066,7 @@ bool NTCPSession::DecryptNextBlock(
         return true;
       }
     } else {  // Message continues
-      m_Decryption.Decrypt(encrypted, m_NextMessage->buf + m_NextMessageOffset);
+      m_Decryption.Decrypt(reinterpret_cast<const CipherBlock*>(encrypted), reinterpret_cast<CipherBlock*>(m_NextMessage->buf + m_NextMessageOffset));
       m_NextMessageOffset += NTCPSize::IV;
     }
     if (m_NextMessageOffset >=
@@ -1157,7 +1145,7 @@ void NTCPSession::HandleTerminationTimer(
       << "!!! no activity for "
       << GetType(NTCPTimeoutLength::Termination) << " seconds";
     // Terminate();
-    m_Socket.close();  // invoke Terminate() from HandleReceive
+    m_Socket.lowest_layer().close();  // invoke Terminate() from HandleReceive
   }
 }
 
@@ -1177,7 +1165,7 @@ void NTCPSession::Terminate() {
     m_IsTerminated = true;
     m_IsEstablished = false;
     boost::system::error_code ec;
-    m_Socket.close(ec);
+    m_Socket.lowest_layer().close(ec);
     transports.PeerDisconnected(shared_from_this());
     m_Server.RemoveNTCPSession(shared_from_this());
     m_SendQueue.clear();

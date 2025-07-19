@@ -56,7 +56,7 @@ option(WITH_STATIC_DEPS "Static build with static dependencies" OFF)
 option(WITH_SHARED_DEPS "Dynamic build with partial in-tree shared dependencies" OFF)
 option(WITH_TESTS      "Build unit tests" OFF)
 option(WITH_FUZZ_TESTS "Build fuzz tests" OFF)
-option(WITH_COTIRE     "Enable cotire (compile time reducer) - precompiled header and single compilation unit builds" ${MSVC})
+option(WITH_COTIRE     "Enable cotire (compile time reducer) - precompiled header and single compilation unit builds" OFF)
 # Verbosity enabled by default, but can be disabled from cli by adding -DCMAKE_VERBOSE_MAKEFILE=OFF
 # https://github.com/monero-project/kovri/pull/867#discussion_r184359361
 option(CMAKE_VERBOSE_MAKEFILE "Enable verbose build output" ON)

@@ -47,11 +47,16 @@ NTCPServer::NTCPServer(
     std::size_t port)
     : m_IsRunning(false),
       m_Service(service),
-      m_SSLContext(boost::asio::ssl::context::tlsv13),
-      m_NTCPEndpoint(boost::asio::ip::tcp::v4(), port),
-      m_NTCPEndpointV6(boost::asio::ip::tcp::v6(), port),
-      m_NTCPAcceptor(nullptr),
-      m_NTCPV6Acceptor(nullptr) {}
+      m_SSLContext(boost::asio::ssl::context::tlsv13)
+{
+  m_SSLContext.set_options(
+      boost::asio::ssl::context::no_sslv2 |
+      boost::asio::ssl::context::no_sslv3 |
+      boost::asio::ssl::context::no_tlsv1 |
+      boost::asio::ssl::context::no_tlsv1_1 |
+      boost::asio::ssl::context::single_dh_use | // For perfect forward secrecy
+      boost::asio::ssl::context::no_compression); // Mitigate CRIME/BREACH
+}
 
 NTCPServer::~NTCPServer() {}
 
@@ -64,9 +69,9 @@ void NTCPServer::Start() {
       std::make_unique<boost::asio::ip::tcp::acceptor>(
           m_Service,
           m_NTCPEndpoint);
-        auto conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
+        auto conn = std::make_shared<NTCPSession>(*this, nullptr);
     m_NTCPAcceptor->async_accept(
-        conn->GetSocket(),
+        conn->GetSocket().lowest_layer(),
         std::bind(
             &NTCPServer::HandleAccept,
             this,
@@ -80,9 +85,9 @@ void NTCPServer::Start() {
       m_NTCPV6Acceptor->set_option(boost::asio::ip::v6_only(true));
       m_NTCPV6Acceptor->bind(m_NTCPEndpointV6);
       m_NTCPV6Acceptor->listen();
-          auto conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
+          auto conn = std::make_shared<NTCPSession>(*this, nullptr);
       m_NTCPV6Acceptor->async_accept(
-          conn->GetSocket(),
+          conn->GetSocket().lowest_layer(),
           std::bind(
               &NTCPServer::HandleAcceptV6,
               this,
@@ -99,7 +104,7 @@ void NTCPServer::HandleAccept(
     LOG(debug) << "NTCPServer: handling accepted connection";
     conn->GetSocket().async_handshake(
         boost::asio::ssl::stream_base::server,
-        [this, conn](const boost::system::error_code& ec) {
+        [this, conn](const boost::system::error_code& ec) mutable {
             if (!ec) {
                 boost::system::error_code ec;
                 auto ep = conn->GetSocket().lowest_layer().remote_endpoint(ec);
@@ -134,7 +139,7 @@ void NTCPServer::HandleAccept(
                    << "'";
   }
   if (ecode != boost::asio::error::operation_aborted) {
-    auto new_conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
+    auto new_conn = std::make_shared<NTCPSession>(*this, nullptr);
     m_NTCPAcceptor->async_accept(
         new_conn->GetSocket().lowest_layer(),
         std::bind(
@@ -152,7 +157,7 @@ void NTCPServer::HandleAcceptV6(
     LOG(debug) << "NTCPServer: handling V6 accepted connection";
     conn->GetSocket().async_handshake(
         boost::asio::ssl::stream_base::server,
-        [this, conn](const boost::system::error_code& ec) {
+        [this, conn](const boost::system::error_code& ec) mutable {
             if (!ec) {
                 boost::system::error_code ec;
                 auto ep = conn->GetSocket().lowest_layer().remote_endpoint(ec);
@@ -187,7 +192,7 @@ void NTCPServer::HandleAcceptV6(
                    << "'";
   }
   if (ecode != boost::asio::error::operation_aborted) {
-    auto new_conn = std::make_shared<NTCPSession>(*this, m_SSLContext);
+    auto new_conn = std::make_shared<NTCPSession>(*this, nullptr);
     m_NTCPV6Acceptor->async_accept(
         new_conn->GetSocket().lowest_layer(),
         std::bind(
@@ -258,7 +263,7 @@ void NTCPServer::AddNTCPSession(
     std::shared_ptr<NTCPSession> session) {
   if (session) {
     LOG(debug)
-      << "NTCPServer: " << session->GetSocket().remote_endpoint()
+      << "NTCPServer: " << session->GetSocket().lowest_layer().remote_endpoint()
       << " *** adding NTCP session";
     std::unique_lock<std::mutex> l(m_NTCPSessionsMutex);
     m_NTCPSessions[session->GetRemoteIdentity().GetIdentHash()] = session;

@@ -80,7 +80,7 @@ class NTCPSession
 
   void Done();
 
-  boost::asio::ip::tcp::socket& GetSocket() {
+  boost::asio::ssl::stream<boost::asio::ip::tcp::socket>& GetSocket() {
     return m_Socket;
   }
 
@@ -114,7 +114,7 @@ class NTCPSession
   /// @note Requires socket to be initialized before call
   const boost::system::error_code SetRemoteEndpoint() {
     boost::system::error_code ec;
-    m_RemoteEndpoint = m_Socket.remote_endpoint(ec);
+    m_RemoteEndpoint = m_Socket.lowest_layer().remote_endpoint(ec);
     return ec;
   }
 
@@ -262,10 +262,13 @@ class NTCPSession
   std::string m_RemoteIdentHashAbbreviation;
 
   NTCPServer& m_Server;
-    boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_Socket;
+  boost::asio::ssl::stream<boost::asio::ip::tcp::socket> m_Socket;
   boost::asio::ip::tcp::endpoint m_RemoteEndpoint;
   boost::asio::deadline_timer m_TerminationTimer;
   bool m_IsEstablished, m_IsTerminated;
+
+  kovri::core::ECBEncryption m_Encryption;
+  kovri::core::ECBDecryption m_Decryption;
 
   
 

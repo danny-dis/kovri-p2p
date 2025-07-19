@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 project(kovri-core CXX)
+add_subdirectory(riffle)
 
 add_library(kovri-core
   instance.cc
@@ -75,6 +76,7 @@ target_link_libraries(kovri-core
  PUBLIC 
    Boost::log
    cppnetlib::client-connections
+   kovri-core-riffle
  PRIVATE
    kovri-private
    Boost::program_options)

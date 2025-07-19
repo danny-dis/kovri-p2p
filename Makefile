@@ -52,7 +52,7 @@ else
 endif
 
 # By default cotire enabled
-COTIRE ?= 1
+COTIRE = 0
 
 ifeq ($(COTIRE), 1)
   cmake_target = all_unity
@@ -104,7 +104,7 @@ endef
 
 define MAKE_CRYPTOPP
   @echo "=== Building cryptopp ==="
-  cd $(build-cryptopp) && $1
+  cd $(build-cryptopp) && $(MAKE) -f GNUmakefile $1
 endef
 
 define CMAKE_FUZZER
@@ -122,18 +122,18 @@ all: dynamic
 #--------------------------------#
 
 deps:
-	$(call MAKE_CRYPTOPP, $(MAKE) $(cryptopp-native) static)
+	$(call MAKE_CRYPTOPP, $(cryptopp-native) static)
 
 shared-deps:
 	$(eval cmake-debug += $(cmake-shared-deps))
-	$(call MAKE_CRYPTOPP, $(MAKE) shared)
+	$(call MAKE_CRYPTOPP, shared)
 
 release-deps:
-	$(call MAKE_CRYPTOPP, $(MAKE) static)
+	$(call MAKE_CRYPTOPP, static)
 
 release-static-deps:
 	$(eval cmake-release += $(cmake-static-deps))
-	$(call MAKE_CRYPTOPP, $(MAKE) static)
+	$(call MAKE_CRYPTOPP, static)
 
 #-----------------------------------#
 # For local, end-user cloned builds #
